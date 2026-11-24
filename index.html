@@ -126,16 +126,24 @@
   .list-card { padding-bottom: 18px; }
   .count-badge { display: inline-grid; place-items: center; min-width: 24px; height: 21px; padding: 0 7px; border-radius: 999px; background: var(--orange-soft); color: #a34f26; font-size: 11px; font-weight: 700; margin-left: 6px; vertical-align: 2px; }
   .todo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+  .todo-shell { position: relative; border-radius: 13px; overflow: hidden; touch-action: pan-y; }
+  .todo-shell .swipe-del {
+    position: absolute; top: 0; right: 0; bottom: 0; width: 92px; border: 0;
+    background: var(--high); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .todo-shell.swiped .todo { transform: translateX(-92px); }
+  .todo-shell.swiping .todo { transition: none; }
   .todo {
+    position: relative; z-index: 1;
     display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 12px;
     border: 1px solid #eee7d9; border-left: 3px solid var(--mid); background: #fffdf8;
     border-radius: 13px; padding: 11px 12px; cursor: pointer;
-    transition: box-shadow .15s, border-color .15s, transform .15s, background .15s;
+    transition: box-shadow .15s, border-color .15s, transform .2s, background .15s;
     animation: rise .22s ease-out;
   }
   @keyframes rise { from { opacity: 0; transform: translateY(4px); } }
   .todo:hover { background: #fffdf9; box-shadow: 0 3px 14px rgba(52,61,45,.07); }
-  .todo.selected { border-color: #a9c2af; box-shadow: 0 0 0 3px rgba(47,93,70,.10); background: #fff; }
+  .todo.selected { border-color: #a9c2af; box-shadow: inset 0 0 0 2px rgba(47,93,70,.16); background: #fff; }
   .todo.prio-high { border-left-color: var(--high); }
   .todo.prio-mid { border-left-color: var(--mid); }
   .todo.prio-low { border-left-color: var(--low); }
@@ -263,6 +271,16 @@
   }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+  .touch-only { display: none; }
+  @media (pointer: coarse) {
+    .touch-only { display: inline; }
+    .todo { grid-template-columns: 30px minmax(0, 1fr) auto; padding: 13px 12px; }
+    .check { width: 26px; height: 26px; font-size: 14px; }
+    .del { font-size: 20px; min-width: 40px; min-height: 40px; padding: 8px; }
+    .axis-task { padding: 10px 9px; }
+    .swipe-del { width: 96px; font-size: 14px; }
+  }
+
   @media (max-width: 860px) {
     .app { padding: 26px 15px 50px; }
     .layout { grid-template-columns: minmax(0, 1fr); }
@@ -273,7 +291,7 @@
   }
   @media (max-width: 480px) {
     .subtitle { font-size: 12px; }
-    .todo { grid-template-columns: 24px minmax(0, 1fr); }
+    .todo { grid-template-columns: 30px minmax(0, 1fr); }
     .todo-side { grid-column: 2; justify-content: flex-start; margin-top: 2px; }
     .entry-row { flex-wrap: wrap; }
     .add-btn { width: 100%; }
@@ -330,13 +348,13 @@
       <section class="card list-card">
         <div class="card-head">
           <h2>待办清单<span class="count-badge" id="todoCount">0</span></h2>
-          <span class="hint">按截止时间排序</span>
+          <span class="hint">按截止时间排序<span class="touch-only"> · 左滑一条可删除</span></span>
         </div>
         <ul class="todo-list" id="todoList" role="listbox" aria-label="待办清单"></ul>
         <div class="empty" id="listEmpty">
           <span class="empty-mark">未</span>
           还没有待办。在上面写一句，回车添加。<br>
-          清空输入框后，用 <kbd>↑</kbd> <kbd>↓</kbd> 选择，<kbd>空格</kbd> 完成，<kbd>Delete</kbd> 删除。
+          清空输入框后，用 <kbd>↑</kbd> <kbd>↓</kbd> 选择，<kbd>空格</kbd> 完成，<kbd>Shift</kbd>+<kbd>Delete</kbd> 删除。
         </div>
         <div class="done-wrap" id="doneWrap" hidden>
           <button type="button" class="done-toggle" id="doneToggle">
@@ -380,10 +398,11 @@
           <div class="key-row"><kbd>Enter</kbd><span>添加当前这句话</span></div>
           <div class="key-row"><kbd>↑</kbd><kbd>↓</kbd><span>输入框空着时，切换选中的待办</span></div>
           <div class="key-row"><kbd>空格</kbd><span>勾选完成 / 取消完成</span></div>
-          <div class="key-row"><kbd>Delete</kbd><span>删除（按两次确认）</span></div>
+          <div class="key-row"><kbd>Shift</kbd><kbd>Delete</kbd><span>删除选中的待办（按两次确认）</span></div>
           <div class="key-row"><kbd>/</kbd><span>随时回到输入框</span></div>
         </div>
         <p style="margin-top:11px">时间写法：今天 / 明天 / 后天 / 下周三 / 3天后 / 12月5日 / 2026-12-05，后面可跟 下午3点、14:00、晚上8点半；优先级用 !、!!、!!!，或「高」「中」「低」。只写「早餐 / 午饭 / 晚饭 / 夜宵 / 下午茶」也会自动配上钟点，日期不用管。</p>
+        <p class="touch-only" style="margin-top:8px">手机上：点左边的圆圈完成；向左滑一条待办，会露出红色的「删除」。</p>
         <div class="backup-bar">
           <p>记录只存在这台设备的浏览器里。</p>
           <div class="backup-actions">
@@ -739,7 +758,7 @@ const PRIO = {
   low: { label: '低', color: '#4f7559', rank: 1 }
 };
 const $ = (sel) => document.querySelector(sel);
-const state = { items: [], selectedId: null, doneOpen: false, armId: null, armTimer: null, lastDay: '' };
+const state = { items: [], selectedId: null, doneOpen: false, armId: null, armTimer: null, lastDay: '', swipeId: null };
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -848,18 +867,21 @@ function rowHtml(item) {
   const badge = badgeFor(due, item.done);
   const selected = state.selectedId === item.id;
   const armed = state.armId === item.id;
-  return '<li class="todo prio-' + item.priority + (selected ? ' selected' : '') + (item.done ? ' is-done' : '') + '" data-id="' + item.id + '" role="option" aria-selected="' + selected + '">' +
-    '<button type="button" class="check' + (item.done ? ' on' : '') + '" data-act="toggle" aria-label="' + (item.done ? '取消完成' : '完成') + '">' + (item.done ? '✓' : '') + '</button>' +
-    '<div class="todo-body">' +
-      '<div class="todo-title">' + esc(item.title) + '</div>' +
-      '<div class="todo-meta">' +
-        '<span class="prio-chip">' + PRIO[item.priority].label + '</span>' +
-        '<span class="due-text">' + fmtDate(due) + ' ' + weekLabel(due) + ' ' + fmtClock(due) + '</span>' +
+  return '<li class="todo-shell" data-id="' + item.id + '">' +
+    '<button type="button" class="swipe-del" data-act="swipe-del" tabindex="-1" aria-label="删除">删除</button>' +
+    '<div class="todo prio-' + item.priority + (selected ? ' selected' : '') + (item.done ? ' is-done' : '') + '" role="option" aria-selected="' + selected + '">' +
+      '<button type="button" class="check' + (item.done ? ' on' : '') + '" data-act="toggle" aria-label="' + (item.done ? '取消完成' : '完成') + '">' + (item.done ? '✓' : '') + '</button>' +
+      '<div class="todo-body">' +
+        '<div class="todo-title">' + esc(item.title) + '</div>' +
+        '<div class="todo-meta">' +
+          '<span class="prio-chip">' + PRIO[item.priority].label + '</span>' +
+          '<span class="due-text">' + fmtDate(due) + ' ' + weekLabel(due) + ' ' + fmtClock(due) + '</span>' +
+        '</div>' +
       '</div>' +
-    '</div>' +
-    '<div class="todo-side">' +
-      '<span class="left-badge ' + badge.cls + '">' + badge.text + '</span>' +
-      '<button type="button" class="del' + (armed ? ' armed' : '') + '" data-act="del" aria-label="删除">' + (armed ? '再按一次' : '×') + '</button>' +
+      '<div class="todo-side">' +
+        '<span class="left-badge ' + badge.cls + '">' + badge.text + '</span>' +
+        '<button type="button" class="del' + (armed ? ' armed' : '') + '" data-act="del" aria-label="删除">' + (armed ? '再按一次' : '×') + '</button>' +
+      '</div>' +
     '</div>' +
   '</li>';
 }
@@ -867,6 +889,7 @@ function rowHtml(item) {
 function renderList() {
   const pending = pendingItems();
   const done = doneItems();
+  state.swipeId = null;
   $('#todoCount').textContent = pending.length;
   $('#todoList').innerHTML = pending.map(rowHtml).join('');
   $('#listEmpty').hidden = pending.length > 0 || done.length > 0;
@@ -1047,9 +1070,18 @@ function selectItem(id, scroll) {
   state.armId = null;
   renderList();
   if (scroll) {
-    const node = document.querySelector('.todo[data-id="' + id + '"]');
+    const node = document.querySelector('.todo-shell[data-id="' + id + '"]');
     if (node) node.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
+}
+
+function setSwipe(id) {
+  document.querySelectorAll('.todo-shell.swiped').forEach((shell) => {
+    if (shell.dataset.id !== id) shell.classList.remove('swiped');
+  });
+  const target = id ? document.querySelector('.todo-shell[data-id="' + id + '"]') : null;
+  if (target) target.classList.add('swiped');
+  state.swipeId = target ? id : null;
 }
 
 function toggleDone(id) {
@@ -1063,16 +1095,22 @@ function toggleDone(id) {
   toast(item.done ? '已完成「' + item.title + '」' : '已取消完成');
 }
 
+function removeItem(id) {
+  const item = findItem(id);
+  state.items = state.items.filter((i) => i.id !== id);
+  if (state.selectedId === id) state.selectedId = null;
+  state.swipeId = null;
+  state.armId = null;
+  saveState();
+  render();
+  toast(item ? '已删除「' + item.title + '」' : '已删除');
+}
+
 function requestDelete(id) {
   if (state.armId === id) {
     clearTimeout(state.armTimer);
     state.armId = null;
-    const item = findItem(id);
-    state.items = state.items.filter((i) => i.id !== id);
-    if (state.selectedId === id) state.selectedId = null;
-    saveState();
-    render();
-    toast(item ? '已删除「' + item.title + '」' : '已删除');
+    removeItem(id);
     return;
   }
   state.armId = id;
@@ -1161,16 +1199,68 @@ function bindEvents() {
   });
 
   const listClick = (e) => {
-    const row = e.target.closest('.todo');
-    if (!row) return;
-    const id = row.dataset.id;
+    const shell = e.target.closest('.todo-shell');
+    if (!shell) return;
+    const id = shell.dataset.id;
     const act = e.target.closest('[data-act]');
-    if (!act) { selectItem(id, false); input.focus({ preventScroll: true }); return; }
-    if (act.dataset.act === 'toggle') { toggleDone(id); input.focus({ preventScroll: true }); }
-    else if (act.dataset.act === 'del') { requestDelete(id); input.focus({ preventScroll: true }); }
+    if (act) {
+      if (act.dataset.act === 'toggle') { toggleDone(id); input.focus({ preventScroll: true }); }
+      else if (act.dataset.act === 'del') { requestDelete(id); input.focus({ preventScroll: true }); }
+      else if (act.dataset.act === 'swipe-del') { removeItem(id); }
+      return;
+    }
+    if (state.swipeId === id) { setSwipe(null); return; }
+    selectItem(id, false);
+    input.focus({ preventScroll: true });
   };
   $('#todoList').addEventListener('click', listClick);
   $('#doneList').addEventListener('click', listClick);
+
+  // 手机上向左滑一条待办，露出「删除」
+  let swipeDrag = null;
+  document.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') return;
+    const shell = e.target.closest('.todo-shell');
+    if (!shell || e.target.closest('[data-act]')) return;
+    if (state.swipeId && state.swipeId !== shell.dataset.id) setSwipe(null);
+    swipeDrag = { shell: shell, id: shell.dataset.id, x: e.clientX, y: e.clientY, dx: 0, moved: false };
+  }, { passive: true });
+
+  document.addEventListener('pointermove', (e) => {
+    if (!swipeDrag) return;
+    const dx = e.clientX - swipeDrag.x;
+    const dy = e.clientY - swipeDrag.y;
+    if (!swipeDrag.moved) {
+      if (Math.abs(dx) < 10) return;
+      if (Math.abs(dx) <= Math.abs(dy)) { swipeDrag = null; return; }
+      swipeDrag.moved = true;
+      swipeDrag.shell.classList.add('swiping');
+    }
+    const offset = Math.max(-96, Math.min(0, dx));
+    swipeDrag.dx = offset;
+    const row = swipeDrag.shell.querySelector('.todo');
+    if (row) row.style.transform = 'translateX(' + offset + 'px)';
+  }, { passive: true });
+
+  const endSwipe = () => {
+    if (!swipeDrag) return;
+    const drag = swipeDrag;
+    swipeDrag = null;
+    if (!drag.moved) return;
+    drag.shell.classList.remove('swiping');
+    const row = drag.shell.querySelector('.todo');
+    if (row) row.style.transform = '';
+    if (drag.dx < -46) setSwipe(drag.id);
+    else if (state.swipeId === drag.id) setSwipe(null);
+  };
+  document.addEventListener('pointerup', endSwipe);
+  document.addEventListener('pointercancel', endSwipe);
+
+  document.addEventListener('click', (e) => {
+    if (!state.swipeId) return;
+    if (e.target.closest('.todo-shell')) return;
+    setSwipe(null);
+  });
 
   $('#axis').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-axis-id]');
@@ -1191,14 +1281,18 @@ function bindEvents() {
   });
 
   input.addEventListener('keydown', (e) => {
+    // 输入框里还有字时，所有按键都只用来编辑文字，绝不碰待办
     if (input.value.trim()) return;
+    // 按住不放产生的重复事件直接忽略，避免“一次长按”被当成两次确认
+    if (e.repeat) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       moveSelection(e.key === 'ArrowDown' ? 1 : -1);
     } else if (e.key === ' ') {
       e.preventDefault();
       if (state.selectedId) toggleDone(state.selectedId);
-    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+    } else if (e.key === 'Delete' && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+      // 必须带 Shift / Ctrl，Backspace 和单独的 Delete 永远不会删待办
       e.preventDefault();
       if (state.selectedId) requestDelete(state.selectedId);
     } else if (e.key === 'Escape') {
