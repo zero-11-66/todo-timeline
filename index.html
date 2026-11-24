@@ -178,6 +178,46 @@
   .todo.is-done .todo-title { text-decoration: line-through; color: var(--muted); font-weight: 500; }
   .todo.is-done .left-badge { background: #eef0e9; color: #8b948a; }
 
+  /* 行内编辑 */
+  .todo-title { cursor: text; }
+  .todo-title:hover { text-decoration: underline dashed rgba(47,93,70,.35); text-underline-offset: 4px; }
+  .title-input {
+    width: 100%; font: inherit; font-weight: 600; color: var(--ink);
+    border: 1px solid #b9c8bc; background: #fff; border-radius: 7px;
+    padding: 3px 7px; outline: none;
+  }
+  .prio-chip { cursor: pointer; }
+  .due-text { cursor: pointer; border-bottom: 1px dashed transparent; }
+  .due-text:hover { border-bottom-color: rgba(47,93,70,.35); }
+  .edit-pop {
+    position: fixed; z-index: 40; min-width: 196px; padding: 10px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 18px 50px rgba(30,39,32,.22);
+  }
+  .edit-pop[hidden] { display: none; }
+  .pop-title { font-size: 11px; color: var(--muted); margin: 0 2px 8px; letter-spacing: .04em; }
+  .prio-options { display: flex; gap: 6px; }
+  .prio-opt {
+    flex: 1; border: 1px solid #e3dccd; background: #fffdf8; border-radius: 9px;
+    padding: 8px 0; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .prio-opt.prio-high { color: var(--high); }
+  .prio-opt.prio-mid { color: #9a5d1f; }
+  .prio-opt.prio-low { color: var(--low); }
+  .prio-opt.on { background: #eef4ee; border-color: #9db6a2; box-shadow: inset 0 0 0 1px #9db6a2; }
+  .pop-datetime {
+    width: 100%; border: 1px solid #ddd4c2; border-radius: 9px; padding: 9px 10px;
+    font: inherit; color: var(--ink); background: #fff;
+  }
+  .pop-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 9px; }
+  .pop-btn {
+    border: 1px solid #d8cebb; background: transparent; border-radius: 8px;
+    padding: 6px 11px; font-size: 11.5px; cursor: pointer;
+  }
+  .pop-btn:hover { background: #f4efe4; }
+  .pop-btn.primary { background: var(--forest); border-color: var(--forest); color: #fffdf8; }
+  .pop-btn.primary:hover { background: #356a50; }
+
   .empty { padding: 30px 12px; text-align: center; color: var(--muted); font-size: 12.5px; line-height: 1.9; }
   .empty .empty-mark { display: block; font-family: "STSong", "Songti SC", serif; font-size: 30px; color: #c5bca9; margin-bottom: 6px; }
   .empty kbd { font-family: inherit; background: #f3eee2; border: 1px solid #e2d9c6; border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; font-size: 11px; color: #6d766c; }
@@ -279,6 +319,8 @@
     .del { font-size: 20px; min-width: 40px; min-height: 40px; padding: 8px; }
     .axis-task { padding: 10px 9px; }
     .swipe-del { width: 96px; font-size: 14px; }
+    .prio-chip { padding: 3px 8px; font-size: 11px; }
+    .due-text { padding: 3px 0; }
   }
 
   @media (max-width: 860px) {
@@ -402,6 +444,7 @@
           <div class="key-row"><kbd>/</kbd><span>随时回到输入框</span></div>
         </div>
         <p style="margin-top:11px">时间写法：今天 / 明天 / 后天 / 下周三 / 3天后 / 12月5日 / 2026-12-05，后面可跟 下午3点、14:00、晚上8点半；优先级用 !、!!、!!!，或「高」「中」「低」。只写「早餐 / 午饭 / 晚饭 / 夜宵 / 下午茶」也会自动配上钟点，日期不用管。</p>
+        <p style="margin-top:8px">修改已有待办：点任务名直接改；点「高 / 中 / 低」换重要程度；点日期时间会弹出日历。</p>
         <p class="touch-only" style="margin-top:8px">手机上：点左边的圆圈完成；向左滑一条待办，会露出红色的「删除」。</p>
         <div class="backup-bar">
           <p>记录只存在这台设备的浏览器里。</p>
@@ -416,6 +459,7 @@
   </div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="edit-pop" id="editPop" hidden></div>
 
 <script>
 /* PARSER_START */
@@ -914,10 +958,10 @@ function rowHtml(item) {
     '<div class="todo prio-' + item.priority + (selected ? ' selected' : '') + (item.done ? ' is-done' : '') + '" role="option" aria-selected="' + selected + '">' +
       '<button type="button" class="check' + (item.done ? ' on' : '') + '" data-act="toggle" aria-label="' + (item.done ? '取消完成' : '完成') + '">' + (item.done ? '✓' : '') + '</button>' +
       '<div class="todo-body">' +
-        '<div class="todo-title">' + esc(item.title) + '</div>' +
+        '<div class="todo-title" data-act="edit-title">' + esc(item.title) + '</div>' +
         '<div class="todo-meta">' +
-          '<span class="prio-chip">' + PRIO[item.priority].label + '</span>' +
-          '<span class="due-text">' + fmtDate(due) + ' ' + weekLabel(due) + ' ' + fmtClock(due) + '</span>' +
+          '<span class="prio-chip" data-act="edit-prio" title="点击修改重要程度">' + PRIO[item.priority].label + '</span>' +
+          '<span class="due-text" data-act="edit-due" title="点击修改时间">' + fmtDate(due) + ' ' + weekLabel(due) + ' ' + fmtClock(due) + '</span>' +
         '</div>' +
       '</div>' +
       '<div class="todo-side">' +
@@ -1222,6 +1266,126 @@ function importBackup(file) {
   reader.readAsText(file);
 }
 
+/* ---------- 行内修改 ---------- */
+function toLocalInput(iso) {
+  const d = new Date(iso);
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+
+function openPop(html, anchor) {
+  const pop = $('#editPop');
+  pop.innerHTML = html;
+  pop.hidden = false;
+  pop.style.visibility = 'hidden';
+  const rect = anchor.getBoundingClientRect();
+  const pw = pop.offsetWidth;
+  const ph = pop.offsetHeight;
+  let left = Math.max(8, Math.min(rect.left, window.innerWidth - pw - 8));
+  let top = rect.bottom + 8;
+  if (top + ph > window.innerHeight - 8) top = rect.top - ph - 8;
+  if (top < 8) top = 8;
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+  pop.style.visibility = '';
+}
+
+function closePop() {
+  const pop = $('#editPop');
+  if (pop.hidden) return;
+  pop.hidden = true;
+  pop.innerHTML = '';
+}
+
+function startTitleEdit(id) {
+  const shell = document.querySelector('.todo-shell[data-id="' + id + '"]');
+  if (!shell) return;
+  const titleEl = shell.querySelector('.todo-title');
+  if (!titleEl || titleEl.querySelector('input')) return;
+  const item = findItem(id);
+  if (!item) return;
+  const original = item.title;
+  const editor = document.createElement('input');
+  editor.className = 'title-input';
+  editor.type = 'text';
+  editor.maxLength = 200;
+  editor.value = original;
+  titleEl.textContent = '';
+  titleEl.appendChild(editor);
+  editor.focus();
+  editor.select();
+  let finished = false;
+  const finish = (save) => {
+    if (finished) return;
+    finished = true;
+    const next = editor.value.trim();
+    if (save && next && next !== original) {
+      item.title = next;
+      saveState();
+      toast('已改名');
+    }
+    render();
+  };
+  editor.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  editor.addEventListener('blur', () => finish(true));
+}
+
+function openPriorityPop(id, anchor) {
+  const item = findItem(id);
+  if (!item) return;
+  const opts = ['high', 'mid', 'low'].map((p) =>
+    '<button type="button" class="prio-opt prio-' + p + (item.priority === p ? ' on' : '') + '" data-prio="' + p + '">' + PRIO[p].label + '</button>'
+  ).join('');
+  openPop('<div class="pop-title">重要程度</div><div class="prio-options">' + opts + '</div>', anchor);
+  $('#editPop').querySelectorAll('[data-prio]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      item.priority = btn.dataset.prio;
+      saveState();
+      closePop();
+      render();
+      toast('重要程度改为「' + PRIO[item.priority].label + '」');
+    });
+  });
+}
+
+function openDuePop(id, anchor) {
+  const item = findItem(id);
+  if (!item) return;
+  openPop(
+    '<div class="pop-title">修改截止时间</div>' +
+    '<input id="popDue" class="pop-datetime" type="datetime-local" step="60" value="' + toLocalInput(item.due) + '">' +
+    '<div class="pop-actions">' +
+      '<button type="button" class="pop-btn" data-pop="cancel">取消</button>' +
+      '<button type="button" class="pop-btn primary" data-pop="save">保存</button>' +
+    '</div>',
+    anchor
+  );
+  const field = $('#popDue');
+  const save = () => {
+    if (!field.value) { toast('请先选一个日期'); return; }
+    const next = new Date(field.value);
+    if (isNaN(next.getTime())) { toast('时间格式不对'); return; }
+    item.due = next.toISOString();
+    saveState();
+    closePop();
+    render();
+    toast('截止时间已更新');
+  };
+  $('#editPop').querySelector('[data-pop="cancel"]').addEventListener('click', closePop);
+  $('#editPop').querySelector('[data-pop="save"]').addEventListener('click', save);
+  field.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); save(); }
+  });
+  field.focus();
+  if (field.showPicker) {
+    try { field.showPicker(); } catch (err) { /* 没有用户手势时忽略 */ }
+  }
+}
+
 /* ---------- 事件 ---------- */
 function bindEvents() {
   const input = $('#taskInput');
@@ -1247,6 +1411,9 @@ function bindEvents() {
     const id = shell.dataset.id;
     const act = e.target.closest('[data-act]');
     if (act) {
+      if (act.dataset.act === 'edit-title') { startTitleEdit(id); return; }
+      if (act.dataset.act === 'edit-prio') { openPriorityPop(id, act); return; }
+      if (act.dataset.act === 'edit-due') { openDuePop(id, act); return; }
       if (act.dataset.act === 'toggle') { toggleDone(id); input.focus({ preventScroll: true }); }
       else if (act.dataset.act === 'del') { requestDelete(id); input.focus({ preventScroll: true }); }
       else if (act.dataset.act === 'swipe-del') { removeItem(id); }
@@ -1304,6 +1471,18 @@ function bindEvents() {
     if (e.target.closest('.todo-shell')) return;
     setSwipe(null);
   });
+
+  document.addEventListener('click', (e) => {
+    if ($('#editPop').hidden) return;
+    if (e.target.closest('#editPop')) return;
+    if (e.target.closest('[data-act^="edit-"]')) return;
+    closePop();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closePop();
+  });
+  window.addEventListener('resize', closePop);
+  window.addEventListener('scroll', closePop, true);
 
   $('#axis').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-axis-id]');
