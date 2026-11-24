@@ -108,6 +108,7 @@
   .p-prio.prio-high { background: rgba(198,72,48,.24); color: #ffc0ad; }
   .p-prio.prio-mid { background: rgba(217,132,61,.20); color: #f4c692; }
   .p-prio.prio-low { background: rgba(120,170,130,.18); color: #b9d8bd; }
+  .p-meal { border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 600; background: rgba(255,255,255,.09); color: rgba(248,244,233,.66); white-space: nowrap; }
   .examples { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 12px; position: relative; z-index: 1; }
   .examples-label { font-size: 11px; color: rgba(248,244,233,.4); margin-right: 2px; }
   .example {
@@ -316,6 +317,7 @@
             <button type="button" class="example" data-example="明天下午3点 交周报 !!">明天下午3点 交周报 !!</button>
             <button type="button" class="example" data-example="下周三 体检 !">下周三 体检 !</button>
             <button type="button" class="example" data-example="12月5日 14:00 项目验收 !!!">12月5日 14:00 项目验收 !!!</button>
+            <button type="button" class="example" data-example="晚饭 少吃点">晚饭 少吃点</button>
           </div>
         </form>
       </section>
@@ -376,7 +378,7 @@
           <div class="key-row"><kbd>Delete</kbd><span>删除（按两次确认）</span></div>
           <div class="key-row"><kbd>/</kbd><span>随时回到输入框</span></div>
         </div>
-        <p style="margin-top:11px">时间写法：今天 / 明天 / 后天 / 下周三 / 3天后 / 12月5日 / 2026-12-05，后面可跟 下午3点、14:00、晚上8点半；优先级用 !、!!、!!!，或「高」「中」「低」。</p>
+        <p style="margin-top:11px">时间写法：今天 / 明天 / 后天 / 下周三 / 3天后 / 12月5日 / 2026-12-05，后面可跟 下午3点、14:00、晚上8点半；优先级用 !、!!、!!!，或「高」「中」「低」。只写「早餐 / 午饭 / 晚饭 / 夜宵 / 下午茶」也会自动配上钟点，日期不用管。</p>
         <div class="backup-bar">
           <p>记录只存在这台设备的浏览器里。</p>
           <div class="backup-actions">
@@ -447,6 +449,15 @@ const PERIOD_DEFAULT = {
   '中午': 12, '下午': 15, '傍晚': 18, '晚上': 20, '夜里': 22, '夜间': 22
 };
 
+// 生活时段词：写到这些词时自动配一个合适的钟点，日期不用写
+const MEAL_HOURS = {
+  '早餐': [8, 0], '早饭': [8, 0],
+  '午餐': [12, 0], '午饭': [12, 0], '中饭': [12, 0],
+  '下午茶': [15, 30],
+  '晚餐': [18, 30], '晚饭': [18, 30],
+  '夜宵': [22, 0], '宵夜': [22, 0]
+};
+
 function adjustHour(hour, period) {
   if (hour == null) return null;
   if (period === '中午') return hour >= 11 ? hour : hour + 12;
@@ -485,6 +496,16 @@ function parseTaskInput(raw, now) {
     priority = wordPrio[1] === '高' ? 'high' : wordPrio[1] === '中' ? 'mid' : 'low';
     consume(wordPrio[0]);
   }
+
+  // 1.5 生活时段词：晚饭 / 午餐 / 下午茶 …（不删词，只用来定钟点）
+  let meal = null;
+  Object.keys(MEAL_HOURS)
+    .sort((a, b) => b.length - a.length)
+    .forEach((key) => {
+      if (!meal && original.includes(key)) {
+        meal = { key: key, h: MEAL_HOURS[key][0], min: MEAL_HOURS[key][1] };
+      }
+    });
 
   let dateKind = null;
   let dateVal = null;
@@ -567,8 +588,8 @@ function parseTaskInput(raw, now) {
     }
   }
 
-  // 9. 时段词：上午 / 下午 / 晚上 ...
-  m = work.match(/(凌晨|清晨|早上|早晨|上午|中午|下午|傍晚|晚上|夜里|夜间)/);
+  // 9. 时段词：上午 / 下午 / 晚上 ...（「下午茶」整体留给生活时段词）
+  m = work.match(/(凌晨|清晨|早上|早晨|上午|中午|下午(?!茶)|傍晚|晚上|夜里|夜间)/);
   if (m) {
     periodWord = m[1];
     consume(m[0]);
@@ -637,6 +658,8 @@ function parseTaskInput(raw, now) {
   let timeKnown = false;
   const period = periodWord || (dayWord && dayWord.period) || null;
   const hasClock = !!clock;
+  const mealHour = meal ? meal.h : null;
+  const mealMin = meal ? meal.min : 0;
   let hh = hasClock ? clock.h : null;
   let mm = hasClock ? clock.min : 0;
 
@@ -648,6 +671,9 @@ function parseTaskInput(raw, now) {
     if (hasClock) {
       hour = adjustHour(hh, period);
       if (hour === 24) { hour = 0; base = addDays(base, 1); }
+    } else if (mealHour != null) {
+      hour = mealHour;
+      mm = mealMin;
     } else if (period && PERIOD_DEFAULT[period] != null) {
       hour = PERIOD_DEFAULT[period];
       mm = 0;
@@ -660,9 +686,20 @@ function parseTaskInput(raw, now) {
     }
     due = new Date(base.getFullYear(), base.getMonth(), base.getDate(), hour, mm, 0, 0);
     timeKnown = true;
-  } else if (hasClock || period) {
-    const hour = hasClock ? adjustHour(hh, period) : (PERIOD_DEFAULT[period] ?? 18);
-    due = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour === 24 ? 0 : hour, hasClock ? mm : 0, 0, 0);
+  } else if (hasClock || mealHour != null || period) {
+    let hour;
+    let minute;
+    if (hasClock) {
+      hour = adjustHour(hh, period);
+      minute = mm;
+    } else if (mealHour != null) {
+      hour = mealHour;
+      minute = mealMin;
+    } else {
+      hour = PERIOD_DEFAULT[period] ?? 18;
+      minute = 0;
+    }
+    due = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour === 24 ? 0 : hour, minute, 0, 0);
     if (hour === 24) due = addDays(due, 1);
     if (due.getTime() <= now.getTime()) due = addDays(due, 1);
     timeKnown = true;
@@ -683,6 +720,7 @@ function parseTaskInput(raw, now) {
     due: due,
     priority: priority || 'mid',
     timeKnown: timeKnown,
+    mealWord: meal ? meal.key : null,
     original: original
   };
 }
@@ -967,6 +1005,7 @@ function updatePreview() {
     (r.timeKnown ? '' : '<span class="p-warn">未识别到时间，先按</span>') +
     '<span>截止 <strong>' + fmtDate(r.due) + ' ' + weekLabel(r.due) + ' ' + fmtClock(r.due) + '</strong></span>' +
     '<span class="p-badge ' + badge.cls + '">' + badge.text + '</span>' +
+    (r.mealWord ? '<span class="p-meal">按「' + esc(r.mealWord) + '」</span>' : '') +
     '<span class="p-prio prio-' + r.priority + '">' + PRIO[r.priority].label + '</span>';
 }
 
