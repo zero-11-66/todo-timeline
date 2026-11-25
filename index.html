@@ -310,6 +310,12 @@
     transition: opacity .2s, transform .2s; z-index: 20; max-width: 86vw; text-align: center;
   }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast.has-action { pointer-events: auto; display: flex; align-items: center; gap: 12px; }
+  .toast-action {
+    flex: none; border: 0; background: rgba(255,255,255,.16); color: #f8f4e9;
+    border-radius: 7px; padding: 4px 10px; min-height: 32px; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .toast-action:hover { background: rgba(255,255,255,.26); }
 
   .touch-only { display: none; }
   @media (pointer: coarse) {
@@ -440,7 +446,7 @@
           <div class="key-row"><kbd>Enter</kbd><span>添加当前这句话</span></div>
           <div class="key-row"><kbd>↑</kbd><kbd>↓</kbd><span>输入框空着时，切换选中的待办</span></div>
           <div class="key-row"><kbd>空格</kbd><span>勾选完成 / 取消完成</span></div>
-          <div class="key-row"><kbd>Shift</kbd><kbd>Delete</kbd><span>删除选中的待办（按两次确认）</span></div>
+          <div class="key-row"><kbd>Shift</kbd><kbd>Delete</kbd><span>删除选中的待办（可撤销）</span></div>
           <div class="key-row"><kbd>/</kbd><span>随时回到输入框</span></div>
         </div>
         <p style="margin-top:11px">时间写法：今天 / 明天 / 后天 / 下周三 / 3天后 / 12月5日 / 2026-12-05，后面可跟 下午3点、14:00、晚上8点半；优先级用 !、!!、!!!，或「高」「中」「低」。只写「早餐 / 午饭 / 晚饭 / 夜宵 / 下午茶」也会自动配上钟点，日期不用管。</p>
@@ -876,12 +882,24 @@ function badgeFor(due, done) {
 }
 
 let toastTimer = 0;
-function toast(msg) {
+let toastAction = null;
+function toast(msg, action) {
   const node = $('#toast');
-  node.textContent = msg;
+  toastAction = action || null;
+  if (action) {
+    node.innerHTML = '<span>' + esc(msg) + '</span><button type="button" class="toast-action">' + esc(action.label) + '</button>';
+    node.classList.add('has-action');
+  } else {
+    node.textContent = msg;
+    node.classList.remove('has-action');
+  }
   node.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => node.classList.remove('show'), 2400);
+  toastTimer = setTimeout(() => {
+    node.classList.remove('show');
+    node.classList.remove('has-action');
+    toastAction = null;
+  }, action ? 6000 : 2400);
 }
 
 /* ---------- 存储 ---------- */
@@ -957,7 +975,6 @@ function rowHtml(item) {
   const due = new Date(item.due);
   const badge = badgeFor(due, item.done);
   const selected = state.selectedId === item.id;
-  const armed = state.armId === item.id;
   return '<li class="todo-shell" data-id="' + item.id + '">' +
     '<button type="button" class="swipe-del" data-act="swipe-del" tabindex="-1" aria-label="删除">删除</button>' +
     '<div class="todo prio-' + item.priority + (selected ? ' selected' : '') + (item.done ? ' is-done' : '') + '" role="option" aria-selected="' + selected + '">' +
@@ -971,7 +988,7 @@ function rowHtml(item) {
       '</div>' +
       '<div class="todo-side">' +
         '<span class="left-badge ' + badge.cls + '">' + badge.text + '</span>' +
-        '<button type="button" class="del' + (armed ? ' armed' : '') + '" data-act="del" aria-label="删除">' + (armed ? '再按一次' : '×') + '</button>' +
+        '<button type="button" class="del" data-act="del" aria-label="删除">×</button>' +
       '</div>' +
     '</div>' +
   '</li>';
@@ -1188,30 +1205,27 @@ function toggleDone(id) {
 }
 
 function removeItem(id) {
-  const item = findItem(id);
-  state.items = state.items.filter((i) => i.id !== id);
+  const index = state.items.findIndex((i) => i.id === id);
+  if (index === -1) return;
+  const item = state.items[index];
+  state.items.splice(index, 1);
   if (state.selectedId === id) state.selectedId = null;
   state.swipeId = null;
-  state.armId = null;
   saveState();
   render();
-  toast(item ? '已删除「' + item.title + '」' : '已删除');
+  toast('已删除「' + item.title + '」', {
+    label: '撤销',
+    run: () => {
+      state.items.splice(Math.min(index, state.items.length), 0, item);
+      saveState();
+      render();
+      toast('已恢复「' + item.title + '」');
+    }
+  });
 }
 
 function requestDelete(id) {
-  if (state.armId === id) {
-    clearTimeout(state.armTimer);
-    state.armId = null;
-    removeItem(id);
-    return;
-  }
-  state.armId = id;
-  state.selectedId = id;
-  clearTimeout(state.armTimer);
-  state.armTimer = setTimeout(() => {
-    if (state.armId === id) { state.armId = null; renderList(); }
-  }, 3000);
-  renderList();
+  removeItem(id);
 }
 
 function moveSelection(dir) {
@@ -1488,6 +1502,16 @@ function bindEvents() {
   });
   window.addEventListener('resize', closePop);
   window.addEventListener('scroll', closePop, true);
+
+  $('#toast').addEventListener('click', () => {
+    if (!toastAction) return;
+    const run = toastAction.run;
+    toastAction = null;
+    clearTimeout(toastTimer);
+    $('#toast').classList.remove('show');
+    $('#toast').classList.remove('has-action');
+    run();
+  });
 
   $('#axis').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-axis-id]');
