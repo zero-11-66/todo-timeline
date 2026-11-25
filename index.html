@@ -174,12 +174,17 @@
   }
   .del:hover { color: #b34c32; background: #f4e5de; }
   .del.armed { font-size: 10px; font-weight: 700; color: #a84127; background: #f4ded4; padding: 4px 7px; white-space: nowrap; }
+  .edit-btn {
+    border: 0; background: transparent; color: #b6aa96; cursor: pointer; font-size: 14px;
+    line-height: 1; padding: 4px 5px; border-radius: 7px; min-width: 26px;
+  }
+  .edit-btn:hover { color: var(--forest); background: var(--forest-soft); }
   .todo.is-done { opacity: .72; border-left-color: #d7d2c4; }
   .todo.is-done .todo-title { text-decoration: line-through; color: var(--muted); font-weight: 500; }
   .todo.is-done .left-badge { background: #eef0e9; color: #8b948a; }
 
   /* 行内编辑 */
-  .todo-title { cursor: text; }
+  .todo-title { cursor: pointer; }
   .todo-title:hover { text-decoration: underline dashed rgba(47,93,70,.35); text-underline-offset: 4px; }
   .title-input {
     width: 100%; font: inherit; font-weight: 600; color: var(--ink);
@@ -323,6 +328,7 @@
     .todo { grid-template-columns: 30px minmax(0, 1fr) auto; padding: 13px 12px; }
     .check { width: 26px; height: 26px; font-size: 14px; }
     .del { font-size: 20px; min-width: 40px; min-height: 40px; padding: 8px; }
+    .edit-btn { font-size: 17px; min-width: 40px; min-height: 40px; }
     .axis-task { padding: 10px 9px; }
     .swipe-del { width: 96px; font-size: 14px; }
     .prio-chip { padding: 3px 8px; font-size: 11px; }
@@ -450,7 +456,7 @@
           <div class="key-row"><kbd>/</kbd><span>随时回到输入框</span></div>
         </div>
         <p style="margin-top:11px">时间写法：今天 / 明天 / 后天 / 下周三 / 3天后 / 12月5日 / 2026-12-05，后面可跟 下午3点、14:00、晚上8点半；优先级用 !、!!、!!!，或「高」「中」「低」。只写「早餐 / 午饭 / 晚饭 / 夜宵 / 下午茶」也会自动配上钟点，日期不用管。</p>
-        <p style="margin-top:8px">修改已有待办：点任务名直接改；点「高 / 中 / 低」换重要程度；点日期时间会弹出日历。</p>
+        <p style="margin-top:8px">点任务行会把名字带到上面输入框，改个时间就能再加一条；点 ✎ 改名；点「高 / 中 / 低」换重要程度；点日期时间会弹出日历。</p>
         <p class="touch-only" style="margin-top:8px">手机上：点左边的圆圈完成；向左滑一条待办，会露出红色的「删除」。</p>
         <div class="backup-bar">
           <p>记录只存在这台设备的浏览器里。</p>
@@ -980,7 +986,7 @@ function rowHtml(item) {
     '<div class="todo prio-' + item.priority + (selected ? ' selected' : '') + (item.done ? ' is-done' : '') + '" role="option" aria-selected="' + selected + '">' +
       '<button type="button" class="check' + (item.done ? ' on' : '') + '" data-act="toggle" aria-label="' + (item.done ? '取消完成' : '完成') + '">' + (item.done ? '✓' : '') + '</button>' +
       '<div class="todo-body">' +
-        '<div class="todo-title" data-act="edit-title">' + esc(item.title) + '</div>' +
+        '<div class="todo-title">' + esc(item.title) + '</div>' +
         '<div class="todo-meta">' +
           '<span class="prio-chip" data-act="edit-prio" title="点击修改重要程度">' + PRIO[item.priority].label + '</span>' +
           '<span class="due-text" data-act="edit-due" title="点击修改时间">' + fmtDate(due) + ' ' + weekLabel(due) + ' ' + fmtClock(due) + '</span>' +
@@ -988,6 +994,7 @@ function rowHtml(item) {
       '</div>' +
       '<div class="todo-side">' +
         '<span class="left-badge ' + badge.cls + '">' + badge.text + '</span>' +
+        '<button type="button" class="edit-btn" data-act="edit-title" aria-label="改名" title="改名">✎</button>' +
         '<button type="button" class="del" data-act="del" aria-label="删除">×</button>' +
       '</div>' +
     '</div>' +
@@ -1184,8 +1191,17 @@ function selectItem(id, scroll) {
   }
 }
 
-function setSwipe(id) {
-  document.querySelectorAll('.todo-shell.swiped').forEach((shell) => {
+function fillInputFromTask(id) {
+  const item = findItem(id);
+  if (!item) return;
+  const input = $('#taskInput');
+  if (input.value.trim()) return; // 不覆盖正在输入的内容
+  input.value = item.title;
+  updatePreview();
+  toast('已填入「' + item.title + '」，改好时间回车即可添加');
+}
+
+function setSwipe(id) {  document.querySelectorAll('.todo-shell.swiped').forEach((shell) => {
     if (shell.dataset.id !== id) shell.classList.remove('swiped');
   });
   const target = id ? document.querySelector('.todo-shell[data-id="' + id + '"]') : null;
@@ -1440,6 +1456,7 @@ function bindEvents() {
     }
     if (state.swipeId === id) { setSwipe(null); return; }
     selectItem(id, false);
+    fillInputFromTask(id);
     input.focus({ preventScroll: true });
   };
   $('#todoList').addEventListener('click', listClick);
@@ -1517,12 +1534,14 @@ function bindEvents() {
     const btn = e.target.closest('[data-axis-id]');
     if (!btn) return;
     selectItem(btn.dataset.axisId, true);
+    fillInputFromTask(btn.dataset.axisId);
     input.focus({ preventScroll: true });
   });
   $('#overdueList').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-axis-id]');
     if (!btn) return;
     selectItem(btn.dataset.axisId, true);
+    fillInputFromTask(btn.dataset.axisId);
     input.focus({ preventScroll: true });
   });
 
