@@ -174,17 +174,12 @@
   }
   .del:hover { color: #b34c32; background: #f4e5de; }
   .del.armed { font-size: 10px; font-weight: 700; color: #a84127; background: #f4ded4; padding: 4px 7px; white-space: nowrap; }
-  .edit-btn {
-    border: 0; background: transparent; color: #b6aa96; cursor: pointer; font-size: 14px;
-    line-height: 1; padding: 4px 5px; border-radius: 7px; min-width: 26px;
-  }
-  .edit-btn:hover { color: var(--forest); background: var(--forest-soft); }
   .todo.is-done { opacity: .72; border-left-color: #d7d2c4; }
   .todo.is-done .todo-title { text-decoration: line-through; color: var(--muted); font-weight: 500; }
   .todo.is-done .left-badge { background: #eef0e9; color: #8b948a; }
 
   /* 行内编辑 */
-  .todo-title { cursor: pointer; }
+  .todo-title { cursor: text; }
   .todo-title:hover { text-decoration: underline dashed rgba(47,93,70,.35); text-underline-offset: 4px; }
   .title-input {
     width: 100%; font: inherit; font-weight: 600; color: var(--ink);
@@ -315,12 +310,6 @@
     transition: opacity .2s, transform .2s; z-index: 20; max-width: 86vw; text-align: center;
   }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
-  .toast.has-action { pointer-events: auto; display: flex; align-items: center; gap: 12px; }
-  .toast-action {
-    flex: none; border: 0; background: rgba(255,255,255,.16); color: #f8f4e9;
-    border-radius: 7px; padding: 4px 10px; min-height: 32px; font-size: 12px; font-weight: 700; cursor: pointer;
-  }
-  .toast-action:hover { background: rgba(255,255,255,.26); }
 
   .touch-only { display: none; }
   @media (pointer: coarse) {
@@ -328,7 +317,6 @@
     .todo { grid-template-columns: 30px minmax(0, 1fr) auto; padding: 13px 12px; }
     .check { width: 26px; height: 26px; font-size: 14px; }
     .del { font-size: 20px; min-width: 40px; min-height: 40px; padding: 8px; }
-    .edit-btn { font-size: 17px; min-width: 40px; min-height: 40px; }
     .axis-task { padding: 10px 9px; }
     .swipe-del { width: 96px; font-size: 14px; }
     .prio-chip { padding: 3px 8px; font-size: 11px; }
@@ -452,11 +440,11 @@
           <div class="key-row"><kbd>Enter</kbd><span>添加当前这句话</span></div>
           <div class="key-row"><kbd>↑</kbd><kbd>↓</kbd><span>输入框空着时，切换选中的待办</span></div>
           <div class="key-row"><kbd>空格</kbd><span>勾选完成 / 取消完成</span></div>
-          <div class="key-row"><kbd>Shift</kbd><kbd>Delete</kbd><span>删除选中的待办（可撤销）</span></div>
+          <div class="key-row"><kbd>Shift</kbd><kbd>Delete</kbd><span>删除选中的待办（按两次确认）</span></div>
           <div class="key-row"><kbd>/</kbd><span>随时回到输入框</span></div>
         </div>
         <p style="margin-top:11px">时间写法：今天 / 明天 / 后天 / 下周三 / 3天后 / 12月5日 / 2026-12-05，后面可跟 下午3点、14:00、晚上8点半；优先级用 !、!!、!!!，或「高」「中」「低」。只写「早餐 / 午饭 / 晚饭 / 夜宵 / 下午茶」也会自动配上钟点，日期不用管。</p>
-        <p style="margin-top:8px">点任务行会把名字带到上面输入框，改个时间就能再加一条；点 ✎ 改名；点「高 / 中 / 低」换重要程度；点日期时间会弹出日历。</p>
+        <p style="margin-top:8px">修改已有待办：点任务名直接改；点「高 / 中 / 低」换重要程度；点日期时间会弹出日历。</p>
         <p class="touch-only" style="margin-top:8px">手机上：点左边的圆圈完成；向左滑一条待办，会露出红色的「删除」。</p>
         <div class="backup-bar">
           <p>记录只存在这台设备的浏览器里。</p>
@@ -547,15 +535,6 @@ function adjustHour(hour, period) {
   return hour;
 }
 
-// 「下」「下个」「下下个」「上」都换算成偏移几周
-function weekOffset(prefix) {
-  if (!prefix) return 0;
-  if (prefix.indexOf('下下') === 0) return 2;
-  if (prefix.indexOf('下') === 0) return 1;
-  if (prefix.indexOf('上') === 0) return -1;
-  return 0;
-}
-
 /**
  * 从一句话里解析出：待办标题、截止时间、优先级。
  * 纯函数，不碰 DOM，方便单独测试。
@@ -640,25 +619,24 @@ function parseTaskInput(raw, now) {
     }
   }
 
-  // 5. 星期：周五 / 下周三 / 下个星期三 / 下下周一 / 这周五
+  // 5. 星期：周五 / 下周三 / 下下周一 / 这周五
   if (!dateKind) {
-    m = work.match(/(下下个?|下个?|本|这|上个?)?\s*(?:一|个)?\s*(?:周|星期|礼拜)\s*([一二三四五六日天])\s*(?:之前|以前|前)?/);
+    m = work.match(/(下下|下个?|本|这|上个?)?\s*(?:周|星期|礼拜)\s*([一二三四五六日天])\s*(?:之前|以前|前)?/);
     if (m) {
       const wdChar = m[2] === '天' ? '日' : m[2];
       dateKind = 'week';
-      dateVal = { wd: WEEK_CN.indexOf(wdChar), weeks: weekOffset(m[1]) };
+      dateVal = { wd: WEEK_CN.indexOf(wdChar), prefix: m[1] || '' };
       consume(m[0]);
     }
   }
 
-  // 5.5 整周范围：本周内 / 下周之内 / 下一周 / 下个星期
+  // 5.5 整周范围：本周内 / 下周之内 / 这周前
   if (!dateKind) {
-    m = work.match(/(下下个?|下个?|本|这|上个?)\s*(?:一|个)?\s*(?:周|星期|礼拜)\s*(?:之?内|以内|之前|以前|前)?/);
+    m = work.match(/(下下|下个?|本|这)\s*(?:周|星期|礼拜)\s*(?:之?内|以内|之前|以前|前)?/);
     if (m) {
-      const weeks = weekOffset(m[1]);
       dateKind = 'weekEnd';
-      dateVal = { weeks: weeks };
-      scopeWord = weeks === 2 ? '下下周内' : weeks === 1 ? '下周内' : weeks === -1 ? '上周内' : '本周内';
+      dateVal = { prefix: m[1] };
+      scopeWord = (m[1] === '下' ? '下周内' : m[1] === '下下' ? '下下周内' : '本周内');
       consume(m[0]);
     }
   }
@@ -762,12 +740,17 @@ function parseTaskInput(raw, now) {
   } else if (dateKind === 'week') {
     const isoToday = (now.getDay() + 6) % 7;
     const targetIso = dateVal.wd === 0 ? 6 : dateVal.wd - 1;
-    const weeks = dateVal.weeks || 0;
-    const delta = weeks === 0 ? (targetIso - isoToday + 7) % 7 : weeks * 7 - isoToday + targetIso;
+    let delta;
+    if (dateVal.prefix === '下下') delta = 14 - isoToday + targetIso;
+    else if (dateVal.prefix === '下') delta = 7 - isoToday + targetIso;
+    else delta = (targetIso - isoToday + 7) % 7;
     base = addDays(today, delta);
   } else if (dateKind === 'weekEnd') {
     const isoToday = (now.getDay() + 6) % 7;
-    base = addDays(today, 6 - isoToday + (dateVal.weeks || 0) * 7);
+    let delta = 6 - isoToday;
+    if (dateVal.prefix === '下下') delta += 14;
+    else if (dateVal.prefix === '下') delta += 7;
+    base = addDays(today, delta);
   } else if (dateKind === 'monthEnd') {
     base = new Date(now.getFullYear(), now.getMonth() + (dateVal.offset || 0) + 1, 0);
   } else if (dateKind === 'rel') {
@@ -888,24 +871,12 @@ function badgeFor(due, done) {
 }
 
 let toastTimer = 0;
-let toastAction = null;
-function toast(msg, action) {
+function toast(msg) {
   const node = $('#toast');
-  toastAction = action || null;
-  if (action) {
-    node.innerHTML = '<span>' + esc(msg) + '</span><button type="button" class="toast-action">' + esc(action.label) + '</button>';
-    node.classList.add('has-action');
-  } else {
-    node.textContent = msg;
-    node.classList.remove('has-action');
-  }
+  node.textContent = msg;
   node.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    node.classList.remove('show');
-    node.classList.remove('has-action');
-    toastAction = null;
-  }, action ? 6000 : 2400);
+  toastTimer = setTimeout(() => node.classList.remove('show'), 2400);
 }
 
 /* ---------- 存储 ---------- */
@@ -981,12 +952,13 @@ function rowHtml(item) {
   const due = new Date(item.due);
   const badge = badgeFor(due, item.done);
   const selected = state.selectedId === item.id;
+  const armed = state.armId === item.id;
   return '<li class="todo-shell" data-id="' + item.id + '">' +
     '<button type="button" class="swipe-del" data-act="swipe-del" tabindex="-1" aria-label="删除">删除</button>' +
     '<div class="todo prio-' + item.priority + (selected ? ' selected' : '') + (item.done ? ' is-done' : '') + '" role="option" aria-selected="' + selected + '">' +
       '<button type="button" class="check' + (item.done ? ' on' : '') + '" data-act="toggle" aria-label="' + (item.done ? '取消完成' : '完成') + '">' + (item.done ? '✓' : '') + '</button>' +
       '<div class="todo-body">' +
-        '<div class="todo-title">' + esc(item.title) + '</div>' +
+        '<div class="todo-title" data-act="edit-title">' + esc(item.title) + '</div>' +
         '<div class="todo-meta">' +
           '<span class="prio-chip" data-act="edit-prio" title="点击修改重要程度">' + PRIO[item.priority].label + '</span>' +
           '<span class="due-text" data-act="edit-due" title="点击修改时间">' + fmtDate(due) + ' ' + weekLabel(due) + ' ' + fmtClock(due) + '</span>' +
@@ -994,8 +966,7 @@ function rowHtml(item) {
       '</div>' +
       '<div class="todo-side">' +
         '<span class="left-badge ' + badge.cls + '">' + badge.text + '</span>' +
-        '<button type="button" class="edit-btn" data-act="edit-title" aria-label="改名" title="改名">✎</button>' +
-        '<button type="button" class="del" data-act="del" aria-label="删除">×</button>' +
+        '<button type="button" class="del' + (armed ? ' armed' : '') + '" data-act="del" aria-label="删除">' + (armed ? '再按一次' : '×') + '</button>' +
       '</div>' +
     '</div>' +
   '</li>';
@@ -1191,17 +1162,8 @@ function selectItem(id, scroll) {
   }
 }
 
-function fillInputFromTask(id) {
-  const item = findItem(id);
-  if (!item) return;
-  const input = $('#taskInput');
-  if (input.value.trim()) return; // 不覆盖正在输入的内容
-  input.value = item.title;
-  updatePreview();
-  toast('已填入「' + item.title + '」，改好时间回车即可添加');
-}
-
-function setSwipe(id) {  document.querySelectorAll('.todo-shell.swiped').forEach((shell) => {
+function setSwipe(id) {
+  document.querySelectorAll('.todo-shell.swiped').forEach((shell) => {
     if (shell.dataset.id !== id) shell.classList.remove('swiped');
   });
   const target = id ? document.querySelector('.todo-shell[data-id="' + id + '"]') : null;
@@ -1221,27 +1183,30 @@ function toggleDone(id) {
 }
 
 function removeItem(id) {
-  const index = state.items.findIndex((i) => i.id === id);
-  if (index === -1) return;
-  const item = state.items[index];
-  state.items.splice(index, 1);
+  const item = findItem(id);
+  state.items = state.items.filter((i) => i.id !== id);
   if (state.selectedId === id) state.selectedId = null;
   state.swipeId = null;
+  state.armId = null;
   saveState();
   render();
-  toast('已删除「' + item.title + '」', {
-    label: '撤销',
-    run: () => {
-      state.items.splice(Math.min(index, state.items.length), 0, item);
-      saveState();
-      render();
-      toast('已恢复「' + item.title + '」');
-    }
-  });
+  toast(item ? '已删除「' + item.title + '」' : '已删除');
 }
 
 function requestDelete(id) {
-  removeItem(id);
+  if (state.armId === id) {
+    clearTimeout(state.armTimer);
+    state.armId = null;
+    removeItem(id);
+    return;
+  }
+  state.armId = id;
+  state.selectedId = id;
+  clearTimeout(state.armTimer);
+  state.armTimer = setTimeout(() => {
+    if (state.armId === id) { state.armId = null; renderList(); }
+  }, 3000);
+  renderList();
 }
 
 function moveSelection(dir) {
@@ -1456,7 +1421,6 @@ function bindEvents() {
     }
     if (state.swipeId === id) { setSwipe(null); return; }
     selectItem(id, false);
-    fillInputFromTask(id);
     input.focus({ preventScroll: true });
   };
   $('#todoList').addEventListener('click', listClick);
@@ -1520,28 +1484,16 @@ function bindEvents() {
   window.addEventListener('resize', closePop);
   window.addEventListener('scroll', closePop, true);
 
-  $('#toast').addEventListener('click', () => {
-    if (!toastAction) return;
-    const run = toastAction.run;
-    toastAction = null;
-    clearTimeout(toastTimer);
-    $('#toast').classList.remove('show');
-    $('#toast').classList.remove('has-action');
-    run();
-  });
-
   $('#axis').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-axis-id]');
     if (!btn) return;
     selectItem(btn.dataset.axisId, true);
-    fillInputFromTask(btn.dataset.axisId);
     input.focus({ preventScroll: true });
   });
   $('#overdueList').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-axis-id]');
     if (!btn) return;
     selectItem(btn.dataset.axisId, true);
-    fillInputFromTask(btn.dataset.axisId);
     input.focus({ preventScroll: true });
   });
 
